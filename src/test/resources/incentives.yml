@@ -1,0 +1,46 @@
+locations:
+  - home
+  - pickup
+  - locker
+locationPenalties:
+  home: -5
+  pickup: 0
+  locker: 0
+locationRewards:
+  home: 5
+  pickup: 10
+  locker: 15
+locationPoints:
+  home: 'reliabilityIndex < 50 ? 5 : reliabilityIndex > 100 ? 15 : 10'
+  pickup: 'reliabilityIndex < 50 ? 20 : reliabilityIndex > 100 ? 20 : 20'
+  locker: 'reliabilityIndex < 50 ? 25 : reliabilityIndex > 100 ? 25 : 25'
+
+pointRewards:
+  - points20
+sequenceRewards:
+  - sequence3
+pointRewardMultipliers:
+  points20: 20 
+sequenceRewardMultipliers:
+  sequence3: 3
+pointRewardTexts:  
+  points20: You reached a level of 20!  
+sequenceRewardTexts:  
+  sequence3: You have 3 successful deliveries in a row! 
+
+blacklistDuration: 10
+blacklistThreshold: 50
+blacklistSequenceThreshold: 5
+
+actions:
+  - smsReplied
+actionRewards:
+  smsReplied: 1 
+actionPenalties:
+  smsReplied: -1 
+actionPoints:
+  smsReplied: 'reliabilityIndex < 50 ? 1 : reliabilityIndex > 100 ? 1 : 1'
+  
+  
+  
+  

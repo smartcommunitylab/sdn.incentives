@@ -22,7 +22,10 @@ import javax.persistence.Entity;
 import javax.persistence.Id;
 import javax.persistence.Table;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
+
 import io.swagger.annotations.ApiModelProperty;
+import it.smartcommunitylab.incentives.service.IncentiveCalculator;
 
 /**
  * @author raman
@@ -36,8 +39,8 @@ public class IncentiveStatus {
 	private String recipientId;
 	@ApiModelProperty("Incentive points earned")
 	private Integer points;
-	
-	private Integer maxPoints;
+	@JsonIgnore
+	private Integer reliabilityIndex;
 	
 	@ApiModelProperty("Last status update time")
 	@Column(name = "last_update", columnDefinition = "TIMESTAMP")
@@ -48,6 +51,12 @@ public class IncentiveStatus {
 	@ApiModelProperty("If recepient is in blacklist, end of the blacklist status")
 	@Column(name = "blacklist_end", columnDefinition = "TIMESTAMP")
 	private LocalDateTime blackListEnd;
+	
+	
+	public IncentiveStatus() {
+		super();
+		this.reliabilityIndex = IncentiveCalculator.START_RELIEABILITY_INDEX;
+	}
 	public String getRecipientId() {
 		return recipientId;
 	}
@@ -55,7 +64,7 @@ public class IncentiveStatus {
 		this.recipientId = recipientId;
 	}
 	public Integer getPoints() {
-		return points;
+		return points == null ? 0 : points;
 	}
 	public void setPoints(Integer points) {
 		this.points = points;
@@ -78,11 +87,11 @@ public class IncentiveStatus {
 	public void setBlackListEnd(LocalDateTime blackListEnd) {
 		this.blackListEnd = blackListEnd;
 	}
-	public Integer getMaxPoints() {
-		return maxPoints;
+	public Integer getReliabilityIndex() {
+		return reliabilityIndex;
 	}
-	public void setMaxPoints(Integer maxPoints) {
-		this.maxPoints = maxPoints;
+	public void setReliabilityIndex(Integer reliabilityIndex) {
+		this.reliabilityIndex = reliabilityIndex;
 	}
 	
 }

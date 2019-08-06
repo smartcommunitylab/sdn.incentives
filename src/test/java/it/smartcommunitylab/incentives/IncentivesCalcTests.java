@@ -1,14 +1,19 @@
 package it.smartcommunitylab.incentives;
 
+import java.io.InputStream;
 import java.time.LocalDateTime;
 import java.util.Collections;
 import java.util.LinkedList;
 import java.util.List;
 
 import org.junit.Assert;
+import org.junit.Before;
 import org.junit.Test;
+import org.yaml.snakeyaml.Yaml;
+import org.yaml.snakeyaml.constructor.Constructor;
 
 import it.smartcommunitylab.incentives.model.Delivery;
+import it.smartcommunitylab.incentives.model.IncentiveModel;
 import it.smartcommunitylab.incentives.model.IncentiveStatus;
 import it.smartcommunitylab.incentives.model.Reward;
 import it.smartcommunitylab.incentives.service.IncentiveCalculator;
@@ -16,9 +21,15 @@ import it.smartcommunitylab.incentives.service.IncentiveCalculator;
 public class IncentivesCalcTests {
 
 	private IncentiveCalculator calc = new IncentiveCalculator();
+	private IncentiveModel model = null;
 	
-	@Test
-	public void contextLoads() {
+	@Before
+	public void init() {
+		Yaml yaml = new Yaml(new Constructor(IncentiveModel.class));
+		InputStream inputStream = this.getClass()
+		 .getClassLoader()
+		 .getResourceAsStream("incentives.yml");
+		model = yaml.load(inputStream);
 	}
 	
 	@Test
@@ -29,16 +40,16 @@ public class IncentivesCalcTests {
 		delivery.setAttempts(3);
 		delivery.setTimeSlotFrom(LocalDateTime.now());
 		delivery.setTimeSlotFrom(LocalDateTime.now().plusHours(3));
-		delivery.setLocationType(IncentiveCalculator.LOCATION_TYPE_HOME);
+		delivery.setLocationType("home");
 		delivery.setStatus(IncentiveCalculator.STATUS_FAILURE);
 		
 		IncentiveStatus status = new IncentiveStatus();
 		status.setRecipientId("1");
 		status.setPoints(0);
-		status.setMaxPoints(0);
-		calc.updateStatusAndComputeRewards(status, delivery, Collections.emptyList(), Collections.emptyList());
-		Assert.assertEquals(-60, (int)status.getPoints());
-		Assert.assertNotNull(status.getBlackListEnd());
+		calc.updateStatusAndComputeRewards(model, status, delivery, Collections.emptyList(), Collections.emptyList());
+		Assert.assertEquals(0, (int)status.getPoints());
+		Assert.assertEquals(85, (int)status.getReliabilityIndex());
+		Assert.assertNull(status.getBlackListEnd());
 	}
 	
 
@@ -50,15 +61,14 @@ public class IncentivesCalcTests {
 		delivery.setAttempts(3);
 		delivery.setTimeSlotFrom(LocalDateTime.now());
 		delivery.setTimeSlotFrom(LocalDateTime.now().plusHours(3));
-		delivery.setLocationType(IncentiveCalculator.LOCATION_TYPE_HOME);
+		delivery.setLocationType("home");
 		delivery.setStatus(IncentiveCalculator.STATUS_SUCCESS);
 		
 		IncentiveStatus status = new IncentiveStatus();
 		status.setRecipientId("1");
 		status.setPoints(0);
-		status.setMaxPoints(0);
-		calc.updateStatusAndComputeRewards(status, delivery, Collections.emptyList(), Collections.emptyList());
-		Assert.assertEquals(-20, (int)status.getPoints());
+		calc.updateStatusAndComputeRewards(model, status, delivery, Collections.emptyList(), Collections.emptyList());
+		Assert.assertEquals(10, (int)status.getPoints());
 	}
 
 	@Test
@@ -66,24 +76,24 @@ public class IncentivesCalcTests {
 		IncentiveStatus status = new IncentiveStatus();
 		status.setRecipientId("1");
 		status.setPoints(0);
-		status.setMaxPoints(0);
 		
 		List<Delivery> list = new LinkedList<>();
-		for (int i = 0; i < 3; i++) {
+		for (int i = 0; i < 5; i++) {
 			// success delivery
 			Delivery delivery = new Delivery();
 			delivery.setRecipientId("1");
 			delivery.setAttempts(1);
 			delivery.setTimeSlotFrom(LocalDateTime.now());
 			delivery.setTimeSlotFrom(LocalDateTime.now().plusHours(3));
-			delivery.setLocationType(IncentiveCalculator.LOCATION_TYPE_HOME);
+			delivery.setLocationType("home");
 			delivery.setStatus(IncentiveCalculator.STATUS_FAILURE);
 			
-			calc.updateStatusAndComputeRewards(status, delivery, list, Collections.emptyList());
+			calc.updateStatusAndComputeRewards(model, status, delivery, list, Collections.emptyList());
 			list.add(delivery);
 			
 		}
-		Assert.assertEquals(-30, (int)status.getPoints());
+		Assert.assertEquals(0, (int)status.getPoints());
+		Assert.assertEquals(75, (int)status.getReliabilityIndex());
 		Assert.assertNotNull(status.getBlackListEnd());
 	}
 
@@ -92,7 +102,6 @@ public class IncentivesCalcTests {
 		IncentiveStatus status = new IncentiveStatus();
 		status.setRecipientId("1");
 		status.setPoints(0);
-		status.setMaxPoints(0);
 		
 		List<Reward> res = null;
 		List<Delivery> list = new LinkedList<>();
@@ -103,15 +112,15 @@ public class IncentivesCalcTests {
 			delivery.setAttempts(1);
 			delivery.setTimeSlotFrom(LocalDateTime.now());
 			delivery.setTimeSlotFrom(LocalDateTime.now().plusHours(3));
-			delivery.setLocationType(IncentiveCalculator.LOCATION_TYPE_LOCKER);
+			delivery.setLocationType("locker");
 			delivery.setStatus(IncentiveCalculator.STATUS_SUCCESS);
 			
-			res = calc.updateStatusAndComputeRewards(status, delivery, list, Collections.emptyList());
+			res = calc.updateStatusAndComputeRewards(model, status, delivery, list, Collections.emptyList());
 			list.add(delivery);
 			
 		}
-		Assert.assertEquals(100, (int)status.getPoints());
-		Assert.assertEquals(res.size(), 1);
+		Assert.assertEquals(50, (int)status.getPoints());
+		Assert.assertEquals(1, res.size());
 
 		// success delivery
 		Delivery delivery = new Delivery();
@@ -119,12 +128,12 @@ public class IncentivesCalcTests {
 		delivery.setAttempts(1);
 		delivery.setTimeSlotFrom(LocalDateTime.now());
 		delivery.setTimeSlotFrom(LocalDateTime.now().plusHours(3));
-		delivery.setLocationType(IncentiveCalculator.LOCATION_TYPE_HOME);
+		delivery.setLocationType("home");
 		delivery.setStatus(IncentiveCalculator.STATUS_SUCCESS);
 		
-		res = calc.updateStatusAndComputeRewards(status, delivery, list, Collections.emptyList());
+		res = calc.updateStatusAndComputeRewards(model, status, delivery, list, Collections.emptyList());
 		list.add(delivery);
-		Assert.assertEquals(110, (int)status.getPoints());
-		Assert.assertEquals(1, res.size());
+		Assert.assertEquals(65, (int)status.getPoints());
+		Assert.assertEquals(2, res.size());
 	}
 }

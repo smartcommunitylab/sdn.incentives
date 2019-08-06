@@ -24,6 +24,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import it.smartcommunitylab.incentives.model.Delivery;
+import it.smartcommunitylab.incentives.model.IncentiveModel;
 import it.smartcommunitylab.incentives.model.IncentiveStatus;
 import it.smartcommunitylab.incentives.model.Reward;
 import it.smartcommunitylab.incentives.repository.DeliveryRepository;
@@ -47,12 +48,16 @@ public class IncentivesService {
 
 	@Autowired
 	private IncentiveCalculator calc;
+	@Autowired
+	private IncentiveModel model;
+	
 	
 	public void storeDeliveries(List<Delivery> deliveries) {
 		deliveries.forEach(d -> {
 			IncentiveStatus status = getRecipient(d.getRecipientId());
 			statusRepo.save(status);
 			List<Reward> rewards = calc.updateStatusAndComputeRewards(
+					model,
 					status, 
 					d, 
 					deliveryRepo.findByRecipientId(d.getRecipientId(), LocalDateTime.now().minusMonths(6)), 
@@ -61,13 +66,19 @@ public class IncentivesService {
 			if (rewards.size() > 0) rewardRepo.saveAll(rewards);
 		});
 	}
-	
+
+	public void processAction(String recipientId, String action, String outcome) {
+		IncentiveStatus status = getRecipient(recipientId);
+		List<Reward> rewards = calc.updateStatusAndComputeRewards(model, status, action, outcome, rewardRepo.findByRecipientId(recipientId));
+		statusRepo.save(status);
+		if (rewards.size() > 0) rewardRepo.saveAll(rewards);
+	}
+
 	private IncentiveStatus getRecipient(String id) {
 		IncentiveStatus elem = statusRepo.findById(id).orElse(null);
 		if (elem == null) {
 			elem = new IncentiveStatus();
 			elem.setPoints(0);
-			elem.setMaxPoints(0);
 			elem.setRecipientId(id);
 			elem.setLastUpdate(LocalDateTime.now());
 			statusRepo.save(elem);
@@ -95,9 +106,12 @@ public class IncentivesService {
 	}
 	
 	public IncentiveStatus updateStatus(String recipientId, IncentiveStatus status) {
-		status.setRecipientId(recipientId);
-		status.setLastUpdate(LocalDateTime.now());
-		statusRepo.save(status);
+		IncentiveStatus old = getStatus(recipientId);
+		old.setLastUpdate(LocalDateTime.now());
+		old.setBlackListEnd(status.getBlackListEnd());
+		old.setBlackListStart(status.getBlackListStart());
+		old.setPoints(status.getPoints());
+		statusRepo.save(old);
 		return getRecipient(recipientId);
 	}
 

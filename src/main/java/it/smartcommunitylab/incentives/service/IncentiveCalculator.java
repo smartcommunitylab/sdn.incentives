@@ -18,11 +18,15 @@ package it.smartcommunitylab.incentives.service;
 import java.io.StringWriter;
 import java.time.LocalDateTime;
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 
+import org.springframework.expression.EvaluationContext;
+import org.springframework.expression.Expression;
+import org.springframework.expression.ExpressionParser;
+import org.springframework.expression.spel.standard.SpelExpressionParser;
+import org.springframework.expression.spel.support.StandardEvaluationContext;
 import org.springframework.stereotype.Component;
 
 import com.github.mustachejava.DefaultMustacheFactory;
@@ -30,6 +34,7 @@ import com.github.mustachejava.Mustache;
 import com.github.mustachejava.MustacheFactory;
 
 import it.smartcommunitylab.incentives.model.Delivery;
+import it.smartcommunitylab.incentives.model.IncentiveModel;
 import it.smartcommunitylab.incentives.model.IncentiveStatus;
 import it.smartcommunitylab.incentives.model.Reward;
 
@@ -53,58 +58,55 @@ import it.smartcommunitylab.incentives.model.Reward;
 @Component
 public class IncentiveCalculator {
 
-	public static final String LOCATION_TYPE_LOCKER = "locker";
-	public static final String LOCATION_TYPE_PICKUP = "pickup";
-	public static final String LOCATION_TYPE_HOME = "home";
+//	public static final String LOCATION_TYPE_LOCKER = "locker";
+//	public static final String LOCATION_TYPE_PICKUP = "pickup";
+//	public static final String LOCATION_TYPE_HOME = "home";
 
 	public static final String STATUS_SUCCESS = "success";
 	public static final String STATUS_FAILURE = "failure";
 	public static final String STATUS_ABORT = "aborted";
 	
-	public static final String REWARD_TRIGGER_LEVEL = "levelreward";
-	public static final String REWARD_TRIGGER_SEQUENCE = "sequence";
+//	public static final String REWARD_TRIGGER_LEVEL = "levelreward";
+//	public static final String REWARD_TRIGGER_SEQUENCE = "sequence";
 	
 	
-	public static final Map<String, Integer> rewards = new HashMap<String, Integer>();
-	static {
-		rewards.put(LOCATION_TYPE_HOME, 10);
-		rewards.put(LOCATION_TYPE_PICKUP, 20);
-		rewards.put(LOCATION_TYPE_LOCKER, 50);
-	}
+//	public static final Map<String, Integer> rewards = new HashMap<String, Integer>();
+//	static {
+//		rewards.put(LOCATION_TYPE_HOME, 10);
+//		rewards.put(LOCATION_TYPE_PICKUP, 20);
+//		rewards.put(LOCATION_TYPE_LOCKER, 50);
+//	}
 	
-	public static final int REWARD_LEVEL_MULTIPLIER = 100;
-	public static final int REWARD_LEVEL_START = 0;
+//	public static final int REWARD_LEVEL_MULTIPLIER = 100;
+//	public static final int REWARD_LEVEL_START = 0;
 	
-	public static final int BLACKLIST_THRESHOLD = -50;
-	public static final int BLACKLIST_DURATION_DAYS = 10;
-	public static final int BLACKLIST_SEQUENCE_THRESHOLD = 3;
+//	public static final int BLACKLIST_THRESHOLD = -50;
+//	public static final int BLACKLIST_DURATION_DAYS = 10;
+//	public static final int BLACKLIST_SEQUENCE_THRESHOLD = 3;
 	
 	
-	public static final int SUCCESS_SEQUENCE_THRESHOLD = 3;
+//	public static final int SUCCESS_SEQUENCE_THRESHOLD = 3;
+	public static final Integer START_RELIEABILITY_INDEX = 100;
 	
 	/**
 	 * Compute points for a single delivery
 	 * @param delivery
 	 * @return
 	 */
-	private int computePoints(Delivery delivery) {
+	private int computeReliabilityIndexInc(IncentiveModel model, Delivery delivery) {
 		if (STATUS_FAILURE.equals(delivery.getStatus())) {
-			// return sum of geometric progression for failed deliveries
-			if (LOCATION_TYPE_HOME.equals(delivery.getLocationType())) {
+			int penalty = Math.abs(model.getLocationPenalties().getOrDefault(delivery.getLocationType(), 0));
+			if (penalty > 0) {
 				int attempts = (delivery.getAttempts() == null ? 1 : delivery.getAttempts());
-				int reward = rewards.get(LOCATION_TYPE_HOME);
-				return -reward * (1 + attempts) / 2 * attempts;
-			}
+				return -penalty * attempts;
+			} 
 		} else if (STATUS_SUCCESS.equals(delivery.getStatus())) {
-			if (!rewards.containsKey(delivery.getLocationType())) return 0;
-			int res = 0;
-			// count failed
-			if (LOCATION_TYPE_HOME.equals(delivery.getLocationType()) && delivery.getAttempts() != null && delivery.getAttempts() > 1) {
+			int inc = Math.abs(model.getLocationRewards().getOrDefault(delivery.getLocationType(), 0));
+			int penalty = Math.abs(model.getLocationPenalties().getOrDefault(delivery.getLocationType(), 0));
+			if (inc > 0) {
 				int attempts = delivery.getAttempts() - 1;
-				int reward = rewards.get(LOCATION_TYPE_HOME);
-				res = -reward * (1 + attempts) / 2 * attempts;
+				return -attempts * penalty + inc; 
 			}
-			return rewards.get(delivery.getLocationType()) + res;
 		}
 		return 0;
 	}
@@ -113,12 +115,74 @@ public class IncentiveCalculator {
 	 * Compute reward for the user status update of a delivery.
 	 * Reward is generated only when the user is not blacklisted
 	 */
-	public List<Reward> updateStatusAndComputeRewards(IncentiveStatus status, Delivery delivery, List<Delivery> previous, List<Reward> rewards) {
-		if (status.getPoints() == null) status.setPoints(0);
+	public List<Reward> updateStatusAndComputeRewards(IncentiveModel model, IncentiveStatus status, String action, String state, List<Reward> rewards) {
+		int indexDelta = computeActionRewardsInc(model, action, state);
+		int pointDelta = computeActionPointsInc(model, status, action, state);
+	
+		List<Reward> list = updateStatusAndComputeRewards(model, status, indexDelta, pointDelta, Collections.emptyList(), rewards);
+		return list;
+	}
+
+	
+	/*
+	 * Compute reward for the user status update of a delivery.
+	 * Reward is generated only when the user is not blacklisted
+	 */
+	public List<Reward> updateStatusAndComputeRewards(IncentiveModel model, IncentiveStatus status, Delivery delivery, List<Delivery> previous, List<Reward> rewards) {
+		int indexDelta = computeReliabilityIndexInc(model, delivery);
+		int pointDelta = computePointsInc(model, status, delivery);
+
+		List<Reward> list = updateStatusAndComputeRewards(model, status, indexDelta, pointDelta, previous, rewards);
+		
+		if (delivery.getStatus().equals(STATUS_SUCCESS)) {
+			if (model.getSequenceRewards() != null) {
+				for (String sequenceReward: model.getSequenceRewards()) {
+					int threshold = model.getSequenceRewardMultipliers().getOrDefault(sequenceReward, 0);
+					if (threshold == 0) continue;
+					
+					// check successful delivery sequence
+					Reward old = rewards.stream().filter(r -> r.getType().equals(sequenceReward)).findFirst().orElse(null);
+					int count = 0;
+					for (Delivery d : previous) {
+						if (old != null && d.getTimeSlotFrom().isBefore(old.getCreated())) break;
+						if (d.getStatus().equals(STATUS_FAILURE)) {
+							count = 0;
+							break;
+						}
+						if (d.getStatus().equals(STATUS_SUCCESS)) {
+							count++;
+						}
+						if (count == threshold - 1) {
+							break;
+						}
+					}
+					if (count >= threshold - 1) {
+						Reward reward = new Reward();
+						reward.setRecipientId(status.getRecipientId());
+						reward.setCreated(LocalDateTime.now());
+						reward.setType(sequenceReward);
+						reward.setText(model.getSequenceRewardTexts().get(sequenceReward));
+						list.add(reward);
+					}
+					
+				}
+			}
+		}
+		return list;
+	}
+	
+	/*
+	 * Compute reward for the user status update of a delivery.
+	 * Reward is generated only when the user is not blacklisted
+	 */
+	public List<Reward> updateStatusAndComputeRewards(IncentiveModel model, IncentiveStatus status, int indexDelta, int pointDelta, List<Delivery> previous, List<Reward> rewards) {
+
+		int oldIndex = status.getReliabilityIndex();
 		int oldPoints = status.getPoints();
-		int delta = computePoints(delivery);
+
 		// update points
-		status.setPoints(oldPoints + delta);
+		status.setPoints(oldPoints + pointDelta);
+		status.setReliabilityIndex(oldIndex + indexDelta);
 		
 		// cheeck and clean black list status
 		if (status.getBlackListEnd() != null && status.getBlackListEnd().isBefore(LocalDateTime.now())) {
@@ -127,77 +191,118 @@ public class IncentiveCalculator {
 		}
 		
 		// failure
-		if (delta < 0) {
-			// check if entering blacklist for points threshold
-			if (status.getBlackListStart() == null && oldPoints > BLACKLIST_THRESHOLD && (oldPoints + delta) <= BLACKLIST_THRESHOLD)  {
-				status.setBlackListStart(LocalDateTime.now());
-				status.setBlackListEnd(status.getBlackListStart().plusDays(BLACKLIST_DURATION_DAYS));
-			// check if entering blackist for sequence 	
-			} else if (status.getBlackListStart() == null) {
-				int count = 0;
-				for (Delivery d : previous) {
-					if (d.getStatus().equals(STATUS_SUCCESS)) {
-						count = 0;
-						break;
-					}
-					if (d.getStatus().equals(STATUS_FAILURE)) {
-						count++;
-					}
-					if (count == BLACKLIST_SEQUENCE_THRESHOLD - 1) {
-						break;
-					}
-				}
-				if (count >= BLACKLIST_SEQUENCE_THRESHOLD - 1) {
+		if (indexDelta < 0) {
+			if (model.getBlacklistDuration() != null && model.getBlacklistThreshold() != null) {
+				// check if entering blacklist for points threshold
+				
+				if (status.getBlackListStart() == null && oldIndex > model.getBlacklistThreshold() && (oldIndex + indexDelta) <= model.getBlacklistThreshold())  {
 					status.setBlackListStart(LocalDateTime.now());
-					status.setBlackListEnd(status.getBlackListStart().plusDays(BLACKLIST_DURATION_DAYS));					
+					status.setBlackListEnd(status.getBlackListStart().plusDays(model.getBlacklistDuration()));
+				// check if entering blackist for sequence 	
+				} else if (status.getBlackListStart() == null) {
+					int count = 0;
+					for (Delivery d : previous) {
+						if (d.getStatus().equals(STATUS_SUCCESS)) {
+							count = 0;
+							break;
+						}
+						if (d.getStatus().equals(STATUS_FAILURE)) {
+							count++;
+						}
+						if (count == model.getBlacklistSequenceThreshold() - 1) {
+							break;
+						}
+					}
+					if (count >= model.getBlacklistSequenceThreshold() - 1) {
+						status.setBlackListStart(LocalDateTime.now());
+						status.setBlackListEnd(status.getBlackListStart().plusDays(model.getBlacklistDuration()));					
+					}
 				}
 			}
-			
-			return Collections.emptyList();
+			return new LinkedList<>();
 		}
 		
 		List<Reward> list = new LinkedList<Reward>();
 		
 		// passed new level: create a reward
-		int passedPointRewards = (oldPoints - REWARD_LEVEL_START) / REWARD_LEVEL_MULTIPLIER;
-		int newPointRewards = (delta + oldPoints - REWARD_LEVEL_START) / REWARD_LEVEL_MULTIPLIER;
-		if (newPointRewards > passedPointRewards && (delta + oldPoints) > status.getMaxPoints()) {
-			Reward reward = new Reward();
-			reward.setRecipientId(status.getRecipientId());
-			reward.setCreated(LocalDateTime.now());
-			reward.setType(REWARD_TRIGGER_LEVEL);
-			reward.setText(getText(REWARD_TRIGGER_LEVEL, Collections.singletonMap("points", (delta+oldPoints))));
-			list.add(reward);
-		}
-		// check successful delivery sequence
-		if (delivery.getStatus().equals(STATUS_SUCCESS)) {
-			Reward old = rewards.stream().filter(r -> r.getType().equals(REWARD_TRIGGER_SEQUENCE)).findFirst().orElse(null);
-			int count = 0;
-			for (Delivery d : previous) {
-				if (old != null && d.getTimeSlotFrom().isBefore(old.getCreated())) break;
-				if (d.getStatus().equals(STATUS_FAILURE)) {
-					count = 0;
-					break;
+		if (model.getPointRewards() != null) {
+			for (String pointReward: model.getPointRewards()) {
+				int multiplier = model.getPointRewardMultipliers().getOrDefault(pointReward, 0);
+				if (multiplier == 0) continue;
+				
+				int passedPointRewards = oldPoints / multiplier;
+				int newPointRewards = (pointDelta + oldPoints) / multiplier;
+				if (newPointRewards > passedPointRewards) {
+					Reward reward = new Reward();
+					reward.setRecipientId(status.getRecipientId());
+					reward.setCreated(LocalDateTime.now());
+					reward.setType(pointReward);
+					reward.setText(model.getPointRewardTexts().get(pointReward));
+					list.add(reward);
 				}
-				if (d.getStatus().equals(STATUS_SUCCESS)) {
-					count++;
-				}
-				if (count == SUCCESS_SEQUENCE_THRESHOLD - 1) {
-					break;
-				}
-			}
-			if (count >= SUCCESS_SEQUENCE_THRESHOLD - 1) {
-				Reward reward = new Reward();
-				reward.setRecipientId(status.getRecipientId());
-				reward.setCreated(LocalDateTime.now());
-				reward.setType(REWARD_TRIGGER_SEQUENCE);
-				reward.setText(getText(REWARD_TRIGGER_SEQUENCE, Collections.singletonMap("sequence", SUCCESS_SEQUENCE_THRESHOLD)));
-				list.add(reward);
 			}
 		}
 
 		status.setLastUpdate(LocalDateTime.now());
 		return list;
+	}
+	
+	/**
+	 * @param model
+	 * @param delivery
+	 * @return
+	 */
+	private int computePointsInc(IncentiveModel model, IncentiveStatus status, Delivery delivery) {
+		if (STATUS_SUCCESS.equals(delivery.getStatus())) {
+			int inc = Math.abs((Integer)evaluateExpression(model.getLocationPoints().getOrDefault(delivery.getLocationType(), "0"), status));
+			if (inc > 0) {
+				return inc;
+			}
+		}
+		return 0;
+	}
+
+	/**
+	 * @param model
+	 * @param delivery
+	 * @return
+	 */
+	private int computeActionPointsInc(IncentiveModel model, IncentiveStatus status, String action, String outcome) {
+		if (STATUS_SUCCESS.equals(outcome)) {
+			int inc = Math.abs((Integer)evaluateExpression(model.getActionPoints().getOrDefault(action, "0"), status));
+			if (inc > 0) {
+				return inc;
+			}
+		}
+		return 0;
+	}
+	/**
+	 * @param model
+	 * @param delivery
+	 * @return
+	 */
+	private int computeActionRewardsInc(IncentiveModel model, String action, String status) {
+		if (STATUS_SUCCESS.equals(status)) {
+			int inc = Math.abs(model.getActionRewards().getOrDefault(action, 0));
+			if (inc > 0) {
+				return inc;
+			}
+		} else if (STATUS_FAILURE.equals(status)) {
+			int inc = Math.abs(model.getActionPenalties().getOrDefault(action, 0));
+			if (inc > 0) {
+				return -inc;
+			}
+		}
+		return 0;
+	}
+	
+	
+	private Object evaluateExpression(String expr, IncentiveStatus status) {
+		ExpressionParser expressionParser = new SpelExpressionParser();
+		Expression expression = expressionParser.parseExpression(expr);
+		EvaluationContext context = new StandardEvaluationContext(status);
+		return expression.getValue(context);
+		
 	}
 	
 	private String getText(String rewardTrigger, Map<String, Object> params) {
