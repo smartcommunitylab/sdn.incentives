@@ -67,11 +67,12 @@ public class IncentivesService {
 		});
 	}
 
-	public void processAction(String recipientId, String action, String outcome) {
+	public IncentiveStatus processAction(String recipientId, String action, String outcome) {
 		IncentiveStatus status = getRecipient(recipientId);
 		List<Reward> rewards = calc.updateStatusAndComputeRewards(model, status, action, outcome, rewardRepo.findByRecipientId(recipientId));
 		statusRepo.save(status);
 		if (rewards.size() > 0) rewardRepo.saveAll(rewards);
+		return getStatus(recipientId);
 	}
 
 	private IncentiveStatus getRecipient(String id) {

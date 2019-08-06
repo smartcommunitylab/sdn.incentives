@@ -74,4 +74,11 @@ public class IncentivesController {
 	public  @ResponseBody ResponseEntity<IncentiveStatus> updateStatus(@PathVariable String recipientId, @RequestBody IncentiveStatus status) {
 		return ResponseEntity.ok(service.updateStatus(recipientId, status));
 	}
+	
+	@ApiOperation(value="Perform custom action that rewards/penalizes the recepient")
+	@PutMapping("/incentives/action/{recepientId}/{action}/{status}")
+	public  @ResponseBody ResponseEntity<IncentiveStatus> performAction(@PathVariable String recipientId, @PathVariable String action, @PathVariable String status) {
+		return ResponseEntity.ok(service.processAction(recipientId, action, status));
+	}
+
 }
