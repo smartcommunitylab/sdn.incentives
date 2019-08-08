@@ -58,7 +58,7 @@ public class IncentivesController {
 	}
 	
 	@ApiOperation(value="Read an incentive status of a specific recipient")
-	@GetMapping("/incentives/status/{recepientId}")
+	@GetMapping("/incentives/status/{recipientId}")
 	public @ResponseBody ResponseEntity<IncentiveStatus> getStatus(@PathVariable String recipientId) {
 		return ResponseEntity.ok(service.getStatus(recipientId));
 	}
@@ -70,13 +70,13 @@ public class IncentivesController {
 	}
 	
 	@ApiOperation(value="Overwrite an incentive status of the specified recipient")
-	@PutMapping("/incentives/status/{recepientId}")
+	@PutMapping("/incentives/status/{recipientId}")
 	public  @ResponseBody ResponseEntity<IncentiveStatus> updateStatus(@PathVariable String recipientId, @RequestBody IncentiveStatus status) {
 		return ResponseEntity.ok(service.updateStatus(recipientId, status));
 	}
 	
-	@ApiOperation(value="Perform custom action that rewards/penalizes the recepient")
-	@PutMapping("/incentives/action/{recepientId}/{action}/{status}")
+	@ApiOperation(value="Perform custom action that rewards/penalizes the recipient")
+	@PutMapping("/incentives/action/{recipientId}/{action}/{status}")
 	public  @ResponseBody ResponseEntity<IncentiveStatus> performAction(@PathVariable String recipientId, @PathVariable String action, @PathVariable String status) {
 		return ResponseEntity.ok(service.processAction(recipientId, action, status));
 	}
