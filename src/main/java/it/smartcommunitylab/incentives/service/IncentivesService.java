@@ -55,13 +55,13 @@ public class IncentivesService {
 	public void storeDeliveries(List<Delivery> deliveries) {
 		deliveries.forEach(d -> {
 			IncentiveStatus status = getRecipient(d.getRecipientId());
-			statusRepo.save(status);
 			List<Reward> rewards = calc.updateStatusAndComputeRewards(
 					model,
 					status, 
 					d, 
 					deliveryRepo.findByRecipientId(d.getRecipientId(), LocalDateTime.now().minusMonths(6)), 
 					rewardRepo.findByRecipientId(d.getRecipientId()));
+			statusRepo.save(status);
 			deliveryRepo.save(d);
 			if (rewards.size() > 0) rewardRepo.saveAll(rewards);
 		});
